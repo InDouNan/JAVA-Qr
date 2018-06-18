@@ -1,0 +1,223 @@
+
+import net.sf.json.JSONObject;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.http.ParseException;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.protocol.HTTP;
+import org.apache.http.util.Args;
+import org.apache.http.util.ByteArrayBuffer;
+import org.apache.http.util.CharArrayBuffer;
+
+import org.apache.http.HttpEntity;
+
+import org.springframework.web.client.RestTemplate;
+
+import javax.servlet.ServletException;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.UnsupportedCharsetException;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Qr {
+    public static byte[] toByteArray(HttpEntity entity, InputStream instream) throws IOException {
+        Args.notNull(entity, "Entity");
+
+        if (instream == null) {
+            return null;
+        } else {
+            try {
+                Args.check(entity.getContentLength() <= 2147483647L, "HTTP entity too large to be buffered in memory");
+                int i = (int) entity.getContentLength();
+                if (i < 0) {
+                    i = 4096;
+                }
+
+                ByteArrayBuffer buffer = new ByteArrayBuffer(i);
+                byte[] tmp = new byte[4096];
+
+                int l;
+                while ((l = instream.read(tmp)) != -1) {
+                    buffer.append(tmp, 0, l);
+                }
+
+                byte[] var6 = buffer.toByteArray();
+                return var6;
+            } finally {
+
+            }
+        }
+    }
+
+    public static String toString(HttpEntity entity, Charset defaultCharset, InputStream instream) throws IOException, ParseException {
+        Args.notNull(entity, "Entity");
+
+        if (instream == null) {
+            return null;
+        } else {
+            try {
+                Args.check(entity.getContentLength() <= 2147483647L, "HTTP entity too large to be buffered in memory");
+                int i = (int) entity.getContentLength();
+                if (i > 70 * 1000) {
+                    return null;
+                }
+
+                Charset charset = null;
+
+                try {
+                    ContentType contentType = ContentType.get(entity);
+                    if (contentType != null) {
+                        charset = contentType.getCharset();
+                    }
+                } catch (UnsupportedCharsetException var13) {
+                    if (defaultCharset == null) {
+                        throw new UnsupportedEncodingException(var13.getMessage());
+                    }
+                }
+
+                if (charset == null) {
+                    charset = defaultCharset;
+                }
+
+                if (charset == null) {
+                    charset = HTTP.DEF_CONTENT_CHARSET;
+                }
+
+                Reader reader = new InputStreamReader(instream, charset);
+                CharArrayBuffer buffer = new CharArrayBuffer(i);
+                char[] tmp = new char[1024];
+
+                int l;
+                while ((l = reader.read(tmp)) != -1) {
+                    buffer.append(tmp, 0, l);
+                }
+
+                String var9 = buffer.toString();
+                return var9;
+            } finally {
+
+            }
+        }
+    }
+
+    public String sendPost(String sceneStr, String accessToken) {
+        int i = 0;
+        String response = null;
+        RestTemplate rest = new RestTemplate();
+        InputStream inputStream = null;
+        System.out.println("调用生成微信accessToken:" + accessToken);
+        OutputStream outputStream = null;
+
+        String url = "https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=" + accessToken;
+
+
+        try {
+            String uploadpath = "C:/Users/apache-tomcat-9.0.0.M20/webapps/ROOT/" + "QR/" + sceneStr + ".png";
+            File file = new File(uploadpath);
+            while (i < 7 && (!file.exists() || file.length() < 80 * 1000)) {
+                System.out.println(i + accessToken);
+                i++;
+                CloseableHttpClient httpclient = null;
+                CloseableHttpResponse httpresponse = null;
+
+                try {
+                    httpclient = HttpClients.createDefault();
+                    HttpPost httppost = new HttpPost(url);
+                    Map<String, Object> param = new HashMap<>();
+                    param.put("scene", sceneStr);
+                    param.put("page", "pages/baoming/baoming");
+                    param.put("width", 430);
+//
+                    System.out.println("调用生成微信URL接口传参:" + param);
+                    String data = JSONObject.fromObject(param).toString();
+                    StringEntity stringentity = new StringEntity(data,
+                            ContentType.create("text/json", "UTF-8"));
+                    httppost.setEntity(stringentity);
+
+                    httpresponse = httpclient.execute(httppost);
+                    System.out.println(httpresponse);
+                    InputStream instream = httpresponse.getEntity().getContent();
+
+                    System.out.println("string" + toString(httpresponse.getEntity(), Charset.forName("UTF-8"), instream));
+
+                    byte[] result = toByteArray(httpresponse.getEntity(), instream);
+                    instream.close();
+                    file.createNewFile();
+
+
+                    System.out.println("调用小程序生成微信永久小程序码URL接口返回结果:" + response);
+
+
+                    System.out.println("result: " + result);
+                    System.out.println(Base64.encodeBase64String(result));
+                    inputStream = new ByteArrayInputStream(result);
+
+//                System.out.println(System.getProperty("baobaotao.root") );
+
+
+                    file.createNewFile();
+
+                    outputStream = new FileOutputStream(file);
+                    int len = 0;
+                    byte[] buf = new byte[1024];
+                    while ((len = inputStream.read(buf, 0, 1024)) != -1) {
+                        outputStream.write(buf, 0, len);
+                    }
+                    outputStream.flush();
+                } finally {
+                    if (httpclient != null) {
+                        httpclient.close();
+                    }
+                    if (httpresponse != null) {
+                        httpresponse.close();
+                    }
+
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (outputStream != null) {
+                try {
+                    outputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return response;
+    }
+
+    public String getQr(String id) throws ServletException {
+//        TokenThread myRunnable1=new TokenThread();
+//        Thread myThread1=new Thread(myRunnable1);
+//        myThread1.start();
+//
+//        System.out.println("myThread1 id ="+myThread1.getId());
+//        while (TokenThread.getAccess()==null){
+//
+//        System.out.println("myThread1 id ="+TokenThread.getAccess());}
+        try {
+            sendPost(id, TokenThread.getAccess());//TokenThread.getAccess()用来获取微信的AccessToken
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("调用小程序生成微信永久小程序码URL接口异常" + e);
+        }
+        // new Thread(new TokenThread()).start();
+        // 启动定时获取access_token的线程}
+        return "/Qr/" + id + ".png";
+    }
+}
